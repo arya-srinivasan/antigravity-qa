@@ -10,17 +10,18 @@ def create_table():
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         conversation_id TEXT,
         question TEXT,
+        context TEXT,
         status TEXT DEFAULT 'unanswered',
-        type TEXT DEFAULT 'basic',
-        topic TEXT
+        type TEXT,
+        topic TEXT           
     )
     """)
     conn.commit()
 
-def add_question(conversation_id, question, topic, type):
+def add_question(conversation_id, question, context, topic, type):
     conn = sqlite3.connect("database/questions.db")
     cursor = conn.cursor()
-    cursor.execute("INSERT INTO questions (conversation_id, question, type, topic) VALUES (?, ?, ?, ?)", (conversation_id, question, type, topic))
+    cursor.execute("INSERT INTO questions (conversation_id, question, context, type, topic) VALUES (?, ?, ?, ?, ?)", (conversation_id, question, context, type, topic))
     conn.commit()
     conn.close()
 

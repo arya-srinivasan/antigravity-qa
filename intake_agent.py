@@ -1,6 +1,7 @@
 import asyncio
 
 from google.antigravity import Agent, LocalAgentConfig
+from database.db import add_question 
 
 instructions="""
 You are a routing agent.
@@ -36,6 +37,7 @@ async def update_summary(current_summary: str, user_msg: str, agent_msg: str) ->
         return await response.text()
     
 async def run_managed_memory_session():
+    conversation_id = str(uuid.uuid4())
     config = LocalAgentConfig()
 
     conversation_summary = "No conversation yet."
@@ -44,10 +46,15 @@ async def run_managed_memory_session():
 
     async with Agent(config) as intake_agent:
 
+        first_time = True
+
         while True:
             user_input = input("\nUser: ")
             if user_input.lower() == "exit":
                 break
+            if first_time:
+                first_user_query = user_input
+                first_time = False
 
             context_prompt = f"""
             CURRENT CONVERSATION MEMORY SUMMARY:
@@ -68,6 +75,8 @@ async def run_managed_memory_session():
                 break
 
             conversation_summary - await update_summary(conversation_summary, user_input, agent_response)
+
+            add_question(conversation_id=conversation_id, question=first_user_query, context=conversation_summary, topic=agent_response.strip("CLASSIFICATION:"), type="basic")
 
 if __name__ == "__main__":
     asyncio.run(run_managed_memory_session())
