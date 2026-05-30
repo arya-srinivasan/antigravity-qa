@@ -2,6 +2,10 @@ import asyncio
 
 from google.antigravity import Agent, LocalAgentConfig
 from database.db import add_question 
+import uuid
+from dotenv import load_dotenv
+
+load_dotenv()
 
 instructions="""
 You are a routing agent.
@@ -70,13 +74,13 @@ async def run_managed_memory_session():
 
             print(f"\nAgent: {agent_response}")
 
-            if "CLASSIFICATION:" in agent_response:
-                print(f"\n[Final Memory State]: {conversation_summary}")
-                break
-
             conversation_summary - await update_summary(conversation_summary, user_input, agent_response)
 
-            add_question(conversation_id=conversation_id, question=first_user_query, context=conversation_summary, topic=agent_response.strip("CLASSIFICATION:"), type="basic")
+            if "CLASSIFICATION:" in agent_response:
+                print(f"\n[Final Memory State]: {conversation_summary}")
+                add_question(conversation_id=conversation_id, question=first_user_query, context=conversation_summary, topic=agent_response.strip("CLASSIFICATION:"), type="basic")
+                break
+            
 
 if __name__ == "__main__":
     asyncio.run(run_managed_memory_session())
