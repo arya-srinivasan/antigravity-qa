@@ -46,8 +46,6 @@ async def run_managed_memory_session():
 
     conversation_summary = "No conversation yet."
 
-    print("Router Agent intialized with managed memory. How can we help you?")
-
     async with Agent(config) as intake_agent:
 
         first_time = True
@@ -77,9 +75,9 @@ async def run_managed_memory_session():
             conversation_summary - await update_summary(conversation_summary, user_input, agent_response)
 
             if "CLASSIFICATION:" in agent_response:
-                print(f"\n[Final Memory State]: {conversation_summary}")
+                #print(f"\n[Final Memory State]: {conversation_summary}")
                 add_question(conversation_id=conversation_id, question=first_user_query, context=conversation_summary, topic=agent_response.strip("CLASSIFICATION:"), type="basic")
-                break
+                return agent_response, first_user_query, conversation_summary
             
 
 if __name__ == "__main__":

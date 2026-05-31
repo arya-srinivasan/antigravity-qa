@@ -34,7 +34,7 @@ prompt="""
     }
     """
 
-async def handle_student_question(conversation_id, question, context):
+async def handle_student_question(conversation_id, question):
     config = LocalAgentConfig()
 
     async with Agent(config) as agent:
