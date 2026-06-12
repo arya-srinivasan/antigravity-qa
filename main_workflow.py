@@ -1,44 +1,47 @@
 import os
 import uuid
-from dotenv import load_dotenv
-from google.antigravity import Agent, LocalAgentConfig
-from database.db import get_questions, mark_question_answered
+from database.db import get_questions
 import asyncio
 from intake_agent import run_managed_memory_session
-from rag_agent import rag_agent_main
-from question_classifier_agent import handle_student_question
+from rag_agent import run_rag_agent
+from question_classifier_agent import handle_follow_up_question
+import time
 
+zoom_meeting_active = False
 
-load_dotenv()
-
-async def start_conversation():
-    reply, question, context = await run_managed_memory_session()
-
-    final_response = await rag_agent_main(question, context)
-
-
-async def main_conversation_loop(conversation_id):
-    reply, question, _ = await run_managed_memory_session()
-
-    final_response = await handle_student_question(conversation_id=conversation_id, question=question)
 
 async def main():
-    conversation_id = uuid.uuid4()
-
-    await start_conversation()
-
-    while True:
-        message = input("User: ").strip()
-
-        if message.lower() == "quit":
-            print("Session ended.")
+    global zoom_meeting_active
+    print("Zoom not started yet. Running intake agent to collect questions until Zoom meeting is active...")
+    while not zoom_meeting_active:
+        result = await run_managed_memory_session()
+        if result is None:
+            print("Exiting session.")
             break
 
-        await main_conversation_loop(conversation_id=conversation_id)
+    print("Zoom meeting is active. Starting main workflow to process questions in real-time...")
+    pre_meeting_questions = get_questions(status="pending")
+    pre_meeting_tasks = [run_rag_agent(q["question"], q["context"]) for q in pre_meeting_questions]
+    await asyncio.gather(*pre_meeting_tasks)
+
+    while True:
+        await handle_follow_up_question()
+
+
+async def wait_for_zoom_and_run():
+    global zoom_meeting_active
+
+    main_task = asyncio.create_task(main())
+    await asyncio.get_event_loop().run_in_executor(None, input, "\nPress Enter once the Zoom meeting has started... ")
+    zoom_meeting_active = True
+
+    await main_task
+
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.run(wait_for_zoom_and_run())
+
 
 
 

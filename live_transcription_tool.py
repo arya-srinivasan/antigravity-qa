@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 PINECONE_API_KEY = os.environ.get("PINECONE_API_KEY")
+ZOOM_LINK = os.environ.get("ZOOM_LINK")
 
 if not PINECONE_API_KEY:
     print("PINECONE_API_KEY variable missing")
@@ -93,9 +94,9 @@ class RealTimeTranscriptChunker:
 chunker = RealTimeTranscriptChunker(target_word_count=100, overlap_word_count=20)
 
 SELECTORS = {
-    "name_input": 'input[placeholder*-"name" i], input[id*=inputname"i]',
+    "name_input": 'input[placeholder*="name"], input[id*="inputname"]',
     "join_button": 'button[class*="preview-join-button"], button[class*="joinBtn"]',
-    "cc_btn":          'button[aria-label*="caption" i], button[aria-label*="CC" i]',
+    "cc_btn":     'button[aria-label*="caption"], button[aria-label="CC"]',
     "caption_item":    '[class*="caption-line"], [class*="transcript-item"]',
     "caption_speaker": '[class*="caption-speaker"], [class*="speaker-name"]',
     "caption_text":    '[class*="caption-text"], [class*="caption-content"]',
@@ -127,7 +128,7 @@ async def run_zoom_bot(
             ],                                               
         )
         context = await browser.new_context(
-            permission=["microphone", "camera"],
+            permissions=["microphone", "camera"],
             user_agent=(
                 "Mozilla/5.0 (X11; Linux x86_64) "
                 "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -217,3 +218,5 @@ def _extract_meeting_id(meeting_url: str) -> Optional[str]:
     match = re.search(r"zoom\.us/(?:j|my)/(\d+)", meeting_url)
     return match.group(1) if match else None
 
+if __name__ == "__main__":
+    asyncio.run(run_zoom_bot(ZOOM_LINK, display_name="Transcription Bot"))

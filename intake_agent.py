@@ -9,16 +9,16 @@ load_dotenv()
 
 instructions="""
 You are a routing agent.
-Your solve objective is to help the user classify their question into the correct category.
+Your sole objective is to help the user classify their question into the correct category.
 
-The available catergories are:
+The available categories are:
 1. Career exploration
 2. Homework help
 3. Other
 
 Rules:
 - Ask target clarifying questions.
-- Once confident, output: "CLASSIFICATION: [Catergory Name]"
+- Once confident, output: "CLASSIFICATION: [Category Name]"
 """
 
 
@@ -42,18 +42,20 @@ async def update_summary(current_summary: str, user_msg: str, agent_msg: str) ->
     
 async def run_managed_memory_session():
     conversation_id = str(uuid.uuid4())
-    config = LocalAgentConfig()
+    config = LocalAgentConfig(system_prompt=instructions)
 
     conversation_summary = "No conversation yet."
 
     async with Agent(config) as intake_agent:
 
         first_time = True
+        not_confirmed_classification = True
+        first_user_query = ""
 
-        while True:
-            user_input = input("\nUser: ")
+        while not_confirmed_classification:
+            user_input = await asyncio.get_event_loop().run_in_executor(None, input, "\nUser: ")
             if user_input.lower() == "exit":
-                break
+                return
             if first_time:
                 first_user_query = user_input
                 first_time = False
@@ -61,8 +63,6 @@ async def run_managed_memory_session():
             context_prompt = f"""
             CURRENT CONVERSATION MEMORY SUMMARY:
             {conversation_summary}
-
-            System Instructions: {instructions}
 
             User's new message: {user_input}
             """
@@ -72,11 +72,15 @@ async def run_managed_memory_session():
 
             print(f"\nAgent: {agent_response}")
 
-            conversation_summary - await update_summary(conversation_summary, user_input, agent_response)
+            conversation_summary = await update_summary(conversation_summary, user_input, agent_response)
 
             if "CLASSIFICATION:" in agent_response:
                 #print(f"\n[Final Memory State]: {conversation_summary}")
-                add_question(conversation_id=conversation_id, question=first_user_query, context=conversation_summary, topic=agent_response.strip("CLASSIFICATION:"), type="basic")
+                topic = agent_response.replace("CLASSIFICATION:", "").strip()
+                add_question(conversation_id=conversation_id, question=first_user_query, context=conversation_summary, topic=topic, type="basic")
+                not_confirmed_classification = False
+                print(f"Agent: Classification confirmed as {topic}. Stored in database with conversation context.")
+
                 return agent_response, first_user_query, conversation_summary
             
 

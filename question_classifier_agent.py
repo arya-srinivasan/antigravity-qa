@@ -1,9 +1,10 @@
 from google.antigravity import Agent, LocalAgentConfig
 from dotenv import load_dotenv
 import json
-from database.db import add_question, get_conversation_context
+from database.db import get_conversation_context
 from faculty_assistant import run_faculty_assistant
 from rag_agent import run_rag_agent
+from intake_agent import run_managed_memory_session
 
 load_dotenv()
 
@@ -34,24 +35,23 @@ prompt="""
     }
     """
 
-async def handle_student_question(conversation_id, question):
-    config = LocalAgentConfig()
+async def handle_follow_up_question():
+    result = await run_managed_memory_session()
+    if result is None:
+        print("Exiting session.")
+        return
+    
+    question, _, context = result
+    config = LocalAgentConfig(system_prompt=prompt)
 
     async with Agent(config) as agent:
         response = await agent.chat(question)
         try:
-            decision = json.load(await response.text())
-
-            add_question(conversation_id, question)
-
-            if decision["decision"] == "faculty":
-                faculty_response = await run_faculty_assistant(question, get_conversation_context(conversation_id, question))
-                return faculty_response
-            else:
-                agent_response = await run_rag_agent(question, get_conversation_context(conversation_id, question))
-                return agent_response
+            decision = json.loads(await response.text())
         except json.JSONDecodeError:
                 return "Classifier returned an unexpected response."
         
-
-
+    if decision.get("decision") == "faculty" and decision.get("confidence", 0) >= 0.8:
+        await run_faculty_assistant(question, context)
+    else:
+        await run_rag_agent(question, context)
