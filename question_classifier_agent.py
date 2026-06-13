@@ -41,8 +41,11 @@ async def handle_follow_up_question():
         print("Exiting session.")
         return
     
-    question, _, context = result
-    config = LocalAgentConfig(system_prompt=prompt)
+    _, question, context = result
+    config = LocalAgentConfig(
+        system_prompt=prompt,
+        model="gemini-2.5-flash",
+    )
 
     async with Agent(config) as agent:
         response = await agent.chat(question)
@@ -51,7 +54,8 @@ async def handle_follow_up_question():
         except json.JSONDecodeError:
                 return "Classifier returned an unexpected response."
         
-    if decision.get("decision") == "faculty" and decision.get("confidence", 0) >= 0.8:
+    if decision.get("decision") == "faculty" or decision.get("confidence", 0) < 0.8:
         await run_faculty_assistant(question, context)
+        print("Your question was sent to the faculty")
     else:
         await run_rag_agent(question, context)

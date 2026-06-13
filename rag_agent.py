@@ -122,7 +122,8 @@ async def end_meeting():
     if chunk:
         await write_chunk_to_pinecone(chunk)
 
-def query_pinecone(query_vector: list[float]) -> str:
+async def query_pinecone(query: str) -> str:
+    query_vector = await get_embedding_query(query)
     try:
         results = index.query(
             vector=query_vector,
@@ -142,14 +143,15 @@ def query_pinecone(query_vector: list[float]) -> str:
         return f"Error executing index query: {str(e)}"
 
 async def run_rag_agent(question, context):
-    query_vector = await get_embedding_query(question)
+    
     config = LocalAgentConfig(
         system_instructions= (
             "Your job is to answer questions using the live meeting transcript chunks." 
             "Synthesize specific, accurate answers utilizing the context and provided Pinecone tool."
             "Mention certain timestamps whenever possible."
         ),
-        tools=[query_pinecone(query_vector)]
+        model="gemini-2.5-flash",
+        tools=[query_pinecone]
     )
 
     async with Agent(config) as agent:
@@ -161,3 +163,8 @@ async def run_rag_agent(question, context):
         answer = await response.text()
         mark_question_answered(question)
         print(f"Agent: {answer}")
+
+if __name__ == "__main__":
+    question = "What is gradient descent"
+    context = "Student is confused about concepts from today's lecture"
+    asyncio.run(run_rag_agent(question, context))

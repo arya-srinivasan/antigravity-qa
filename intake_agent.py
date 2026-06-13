@@ -7,82 +7,82 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-instructions="""
-You are a routing agent.
-Your sole objective is to help the user classify their question into the correct category.
-
-The available categories are:
-1. Career exploration
-2. Homework help
-3. Other
-
-Rules:
-- Ask target clarifying questions.
-- Once confident, output: "CLASSIFICATION: [Category Name]"
-"""
-
-
-async def update_summary(current_summary: str, user_msg: str, agent_msg: str) -> str:
-    config = LocalAgentConfig()
-
-    summarizer_prompt = f"""
-    Your job is to update a short, running summary of the conversation based on the new information provided to you.
-
-    Current Summary: "{current_summary}"
-    New Exchange:
-    User: {user_msg}
-    Agent: {agent_msg}
-
-    Output a new, consolidated summary combining the past context with the new details. Keep it under 2 sentences.
-    """
-
-    async with Agent(config) as summarizer:
-        response = await summarizer.chat(summarizer_prompt)
-        return await response.text()
+async def classify_question(question: str, summary: str) -> str | None:
+    categories = ["Neural networks", "Backpropagation", "Gradient descent", "Chain rule"]
+    
+    config = LocalAgentConfig(model="gemini-2.5-flash")
+    
+    async with Agent(config) as classifier:
+        response = await classifier.chat(
+            f"You are a classifier. Output only the category name, nothing else.\n"
+            f"Categories: Neural networks, Backpropagation, Gradient descent, Chain rule, Other\n"
+            f"Question: {question}\n"
+            f"Context: {summary}\n"
+            f"Output only the category name."
+        )
+        text = await response.text()
+        print(f"DEBUG classifier output: {text}")
+        
+        text_lower = text.lower()
+        for category in categories:
+            if category.lower() in text_lower:
+                return category
+        
+    return None
     
 async def run_managed_memory_session():
     conversation_id = str(uuid.uuid4())
-    config = LocalAgentConfig(system_prompt=instructions)
-
+    conversation_history = []
     conversation_summary = "No conversation yet."
+    config = LocalAgentConfig()
 
-    async with Agent(config) as intake_agent:
+    print("\nUser: ", end="", flush=True)
+    first_user_query = await asyncio.get_event_loop().run_in_executor(None, input, "")
 
-        first_time = True
-        not_confirmed_classification = True
-        first_user_query = ""
+    if first_user_query.lower() == "exit":
+        return
+    
+    if first_user_query.lower() == "start zoom":
+        return "start zoom"
 
-        while not_confirmed_classification:
-            user_input = await asyncio.get_event_loop().run_in_executor(None, input, "\nUser: ")
+    conversation_history.append({"role": "user", "content": first_user_query})
+    conversation_summary = f"Student asked: {first_user_query}"
+
+    max_turn = 0
+
+    async with Agent(config) as agent:
+
+        while True:
+            # Try to classify with current context
+            topic = await classify_question(first_user_query, conversation_summary)
+            max_turn += 1
+            if topic or max_turn == 5:
+                add_question(conversation_id=conversation_id, question=first_user_query, context=conversation_summary, topic=topic, type="basic")
+                print(f"\nAgent: Got it! I've routed your question about {topic}.")
+                return None, first_user_query, conversation_summary
+            
+            response = await agent.chat(
+                f"Conversation so far:\n{conversation_summary}\n\n"
+                f"Write only a single question mark ending sentence that asks for clarification. "
+                f"Do not write anything else. Do not explain. Do not teach. "
+                f"Your entire response must be one sentence ending with a question mark."
+            )
+            clarifying_question = await response.text()
+            print(f"\nAgent: {clarifying_question}\n")
+
+            conversation_history.append({"role": "assistant", "content": clarifying_question})
+
+            print("\nUser: ", end="", flush=True)
+            user_input = await asyncio.get_event_loop().run_in_executor(None, input, "")
+
             if user_input.lower() == "exit":
                 return
-            if first_time:
-                first_user_query = user_input
-                first_time = False
-
-            context_prompt = f"""
-            CURRENT CONVERSATION MEMORY SUMMARY:
-            {conversation_summary}
-
-            User's new message: {user_input}
-            """
-
-            response = await intake_agent.chat(context_prompt)
-            agent_response = await response.text()
-
-            print(f"\nAgent: {agent_response}")
-
-            conversation_summary = await update_summary(conversation_summary, user_input, agent_response)
-
-            if "CLASSIFICATION:" in agent_response:
-                #print(f"\n[Final Memory State]: {conversation_summary}")
-                topic = agent_response.replace("CLASSIFICATION:", "").strip()
-                add_question(conversation_id=conversation_id, question=first_user_query, context=conversation_summary, topic=topic, type="basic")
-                not_confirmed_classification = False
-                print(f"Agent: Classification confirmed as {topic}. Stored in database with conversation context.")
-
-                return agent_response, first_user_query, conversation_summary
             
+            if user_input.lower() == "start zoom":
+                return "start zoom"
+
+            conversation_history.append({"role": "user", "content": user_input})
+            conversation_summary += f"\nAgent asked: {clarifying_question}\nStudent replied: {user_input}"
 
 if __name__ == "__main__":
     asyncio.run(run_managed_memory_session())

@@ -23,7 +23,10 @@ prompt="""
     """
 
 async def run_faculty_assistant(question, context):
-    config = LocalAgentConfig(system_prompt=prompt)
+    config = LocalAgentConfig(
+        system_prompt=prompt,
+        model="gemini-2.5-flash",
+    )
 
     async with Agent(config) as agent:
         msg = (
